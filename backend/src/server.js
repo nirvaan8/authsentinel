@@ -13,17 +13,20 @@ const server = http.createServer(app);
 app.use(cors());
 app.use(express.json());
 
+// Routes
+const authRoutes = require('./routes/auth');
+app.use('/api/auth', authRoutes);
+
 // DB Connection
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('✅ MongoDB connected — authsentinel db'))
   .catch((err) => console.error('❌ MongoDB connection error:', err));
 
-// Health check route
+// Health check
 app.get('/', (req, res) => {
   res.json({ message: 'AuthSentinel API is running' });
 });
 
-// Start server
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
