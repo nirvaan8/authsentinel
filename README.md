@@ -49,3 +49,179 @@ In most organizations, IAM and SOC operate in silos. User accounts get compromis
 ---
 
 ## Architecture
+
+```
+┌─────────────────────────────────────────────┐
+│                  Frontend                    │
+│   React Dashboard  │  User Management Panel  │
+└────────────┬────────────────────────────────┘
+             │ REST API + WebSocket
+┌────────────▼────────────────────────────────┐
+│                  Backend                     │
+│  Auth Engine  │  RBAC Middleware  │  Logger  │
+│         Threat Detection Rules               │
+└────────────┬────────────────────────────────┘
+             │
+┌────────────▼────────────────────────────────┐
+│               MongoDB Atlas                  │
+│  Users  │  Sessions  │  Alerts  │  AuditLog │
+└─────────────────────────────────────────────┘
+```
+
+---
+
+## Project Structure
+
+```
+authsentinel/
+├── backend/
+│   ├── src/
+│   │   ├── routes/          # auth, users, alerts
+│   │   ├── middleware/       # RBAC, JWT verify, rate limit
+│   │   ├── detection/        # threat detection rule engine
+│   │   ├── models/           # Mongoose schemas
+│   │   └── utils/            # logger, totp, helpers
+│   ├── .env.example
+│   └── package.json
+├── frontend/
+│   ├── src/
+│   │   ├── pages/            # Login, Dashboard, Users, Alerts
+│   │   ├── components/       # AlertFeed, AuditTable, StatCards
+│   │   └── hooks/            # useWebSocket, useAuth
+│   └── package.json
+├── docker-compose.yml
+└── README.md
+```
+
+---
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js v18+
+- MongoDB Atlas account (free tier works)
+- Docker (optional, for containerized setup)
+
+### Installation
+
+```bash
+# Clone the repo
+git clone https://github.com/nirvaan8/authsentinel
+cd authsentinel
+
+# Backend setup
+cd backend
+cp .env.example .env        # fill in your MongoDB URI + JWT secret
+npm install
+npm run dev
+
+# Frontend setup (new terminal)
+cd frontend
+npm install
+npm start
+```
+
+### With Docker
+
+```bash
+docker-compose up --build
+```
+
+App runs at `http://localhost:3000`, API at `http://localhost:5000`.
+
+---
+
+## Environment Variables
+
+Create a `.env` file inside `/backend` using `.env.example` as a reference:
+
+```env
+PORT=5000
+MONGO_URI=your_mongodb_atlas_uri_here
+JWT_SECRET=your_jwt_secret_here
+JWT_EXPIRES_IN=7d
+TOTP_SECRET_KEY=your_totp_base_secret
+NODE_ENV=development
+```
+
+Never commit your `.env` file. It is already listed in `.gitignore`.
+
+---
+
+## Default Roles
+
+| Role | Permissions |
+|---|---|
+| Admin | Full access — provision users, change roles, view all logs |
+| Analyst | View alerts, acknowledge incidents, read audit logs |
+| Viewer | Read-only dashboard access |
+| Guest | Login only, no dashboard access |
+
+---
+
+## Threat Detection Rules
+
+| Rule | Trigger | Severity |
+|---|---|---|
+| Brute Force | 5+ failed logins within 2 minutes | Critical |
+| Off-Hours Access | Login outside 08:00–20:00 IST | Medium |
+| Privilege Escalation | Role changed to Admin without approval | High |
+| Account Lockout | Account locked after repeated failures | High |
+| MFA Failure | 3+ consecutive TOTP failures | High |
+| Suspicious Role Change | Role changed by non-Admin user | Critical |
+
+---
+
+## API Endpoints
+
+### Auth
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/api/auth/register` | Register a new user |
+| POST | `/api/auth/login` | Login + receive JWT |
+| POST | `/api/auth/verify-totp` | Verify TOTP code |
+| POST | `/api/auth/logout` | Invalidate session |
+
+### Users
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/api/users` | List all users (Admin only) |
+| PATCH | `/api/users/:id/role` | Change user role (Admin only) |
+| PATCH | `/api/users/:id/suspend` | Suspend a user (Admin only) |
+
+### Alerts
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/api/alerts` | Get all alerts |
+| PATCH | `/api/alerts/:id/acknowledge` | Acknowledge an alert |
+
+### Audit Log
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/api/audit` | Get full audit log (Admin/Analyst) |
+
+---
+
+## Team
+
+| Name | Role |
+|---|---|
+| Nirvaan Katyal | Backend — Auth engine, RBAC, threat detection, audit logging |
+| [Partner Name] | Frontend — SOC dashboard, alert UI, user panel, WebSocket integration |
+
+---
+
+## Roadmap
+
+- [ ] SIEM export (Splunk/Elastic push)
+- [ ] Geo-based anomaly detection (login from new country)
+- [ ] Email/SMS alert notifications
+- [ ] PDF incident report export
+- [ ] Kubernetes deployment config
+
+---
+
+## License
+
+MIT License — free to use, modify, and distribute with attribution.
