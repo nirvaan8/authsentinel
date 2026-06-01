@@ -1,111 +1,217 @@
 const express = require('express');
 const router = express.Router();
+
 const jwt = require('jsonwebtoken');
 const speakeasy = require('speakeasy');
 const qrcode = require('qrcode');
 const rateLimit = require('express-rate-limit');
+
 const User = require('../models/User');
 const { logEvent } = require('../utils/auditLogger');
+const {
+  checkBruteForce,
+  checkOffHours,
+  checkMfaFail
+} = require('../detection/rules');
+const { getWss } = require('../utils/websocket');
 
-// Rate limiter — max 10 requests per minute per IP
 const loginLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 10,
-  message: { error: 'Too many requests, slow down.' }
+  message: {
+    error: 'Too many requests, slow down.'
+  }
 });
 
-// Generate JWT
 const generateToken = (user) => {
   return jwt.sign(
-    { id: user._id, role: user.role, email: user.email },
+    {
+      id: user._id,
+      role: user.role,
+      email: user.email
+    },
     process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRES_IN }
+    {
+      expiresIn: process.env.JWT_EXPIRES_IN
+    }
   );
 };
 
-// ─── REGISTER ───────────────────────────────────────────
+// REGISTER
 router.post('/register', async (req, res) => {
   try {
     const { name, email, password, role } = req.body;
 
     const existing = await User.findOne({ email });
-    if (existing) return res.status(400).json({ error: 'Email already registered' });
 
-    const user = await User.create({ name, email, password, role: role || 'Viewer' });
-    await logEvent('REGISTER', email, req.ip, { name, role: user.role });
+    if (existing) {
+      return res.status(400).json({
+        error: 'Email already registered'
+      });
+    }
 
-    res.status(201).json({ message: 'User registered successfully', userId: user._id });
+    const user = await User.create({
+      name,
+      email,
+      password,
+      role: role || 'Viewer'
+    });
+
+    await logEvent(
+      'REGISTER',
+      email,
+      req.ip,
+      {
+        name,
+        role: user.role
+      }
+    );
+
+    res.status(201).json({
+      message: 'User registered successfully',
+      userId: user._id
+    });
+
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({
+      error: err.message
+    });
   }
 });
 
-// ─── LOGIN ───────────────────────────────────────────────
+// LOGIN
 router.post('/login', loginLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
     const ip = req.ip;
 
     const user = await User.findOne({ email });
+
     if (!user || !user.password) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+      return res.status(401).json({
+        error: 'Invalid credentials'
+      });
     }
 
-    // Check if suspended
     if (user.isSuspended) {
-      return res.status(403).json({ error: 'Account suspended' });
+      return res.status(403).json({
+        error: 'Account suspended'
+      });
     }
 
-    // Check if locked
     if (user.isLocked()) {
-      return res.status(423).json({ error: 'Account temporarily locked. Try again later.' });
+      return res.status(423).json({
+        error: 'Account temporarily locked. Try again later.'
+      });
     }
 
-    // Check password
     const isMatch = await user.comparePassword(password);
+
     if (!isMatch) {
       user.failedLoginAttempts += 1;
 
-      // Lock after 5 failed attempts
       if (user.failedLoginAttempts >= 5) {
-        user.lockUntil = new Date(Date.now() + 2 * 60 * 1000); // 2 min lock
+        user.lockUntil = new Date(
+          Date.now() + 2 * 60 * 1000
+        );
+
         await user.save();
-        await logEvent('LOCKOUT', email, ip, { attempts: user.failedLoginAttempts });
-        return res.status(423).json({ error: 'Too many failed attempts. Account locked for 2 minutes.' });
+
+        await checkBruteForce(
+          user,
+          ip,
+          getWss()
+        );
+
+        await logEvent(
+          'LOCKOUT',
+          email,
+          ip,
+          {
+            attempts: user.failedLoginAttempts
+          }
+        );
+
+        return res.status(423).json({
+          error: 'Too many failed attempts. Account locked for 2 minutes.'
+        });
       }
 
       await user.save();
-      await logEvent('LOGIN_FAILED', email, ip, { attempts: user.failedLoginAttempts });
-      return res.status(401).json({ error: 'Invalid credentials' });
+
+      await logEvent(
+        'LOGIN_FAILED',
+        email,
+        ip,
+        {
+          attempts: user.failedLoginAttempts
+        }
+      );
+
+      return res.status(401).json({
+        error: 'Invalid credentials'
+      });
     }
 
-    // Reset failed attempts on success
     user.failedLoginAttempts = 0;
     user.lockUntil = null;
     user.lastLogin = new Date();
+
     await user.save();
 
-    // If MFA enabled, don't give token yet
+    await checkOffHours(
+      email,
+      ip,
+      getWss()
+    );
+
     if (user.mfaEnabled) {
-      return res.json({ mfaRequired: true, userId: user._id });
+      return res.json({
+        mfaRequired: true,
+        userId: user._id
+      });
     }
 
     const token = generateToken(user);
-    await logEvent('LOGIN', email, ip, { role: user.role });
 
-    res.json({ token, user: { id: user._id, name: user.name, email: user.email, role: user.role } });
+    await logEvent(
+      'LOGIN',
+      email,
+      ip,
+      {
+        role: user.role
+      }
+    );
+
+    res.json({
+      token,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role
+      }
+    });
+
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({
+      error: err.message
+    });
   }
 });
 
-// ─── VERIFY TOTP ─────────────────────────────────────────
+// VERIFY TOTP
 router.post('/verify-totp', async (req, res) => {
   try {
     const { userId, token } = req.body;
 
     const user = await User.findById(userId);
-    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    if (!user) {
+      return res.status(404).json({
+        error: 'User not found'
+      });
+    }
 
     const verified = speakeasy.totp.verify({
       secret: user.mfaSecret,
@@ -115,45 +221,105 @@ router.post('/verify-totp', async (req, res) => {
     });
 
     if (!verified) {
-      await logEvent('MFA_FAIL', user.email, req.ip);
-      return res.status(401).json({ error: 'Invalid TOTP code' });
+      await checkMfaFail(
+        user.email,
+        req.ip,
+        getWss()
+      );
+
+      await logEvent(
+        'MFA_FAIL',
+        user.email,
+        req.ip
+      );
+
+      return res.status(401).json({
+        error: 'Invalid TOTP code'
+      });
     }
 
-    await logEvent('MFA_SUCCESS', user.email, req.ip);
+    await logEvent(
+      'MFA_SUCCESS',
+      user.email,
+      req.ip
+    );
+
     const jwtToken = generateToken(user);
-    res.json({ token: jwtToken, user: { id: user._id, name: user.name, email: user.email, role: user.role } });
+
+    res.json({
+      token: jwtToken,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role
+      }
+    });
+
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({
+      error: err.message
+    });
   }
 });
 
-// ─── SETUP MFA ───────────────────────────────────────────
+// SETUP MFA
 router.post('/setup-mfa', async (req, res) => {
   try {
     const { userId } = req.body;
-    const user = await User.findById(userId);
-    if (!user) return res.status(404).json({ error: 'User not found' });
 
-    const secret = speakeasy.generateSecret({ name: `AuthSentinel (${user.email})` });
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({
+        error: 'User not found'
+      });
+    }
+
+    const secret = speakeasy.generateSecret({
+      name: `AuthSentinel (${user.email})`
+    });
+
     user.mfaSecret = secret.base32;
     user.mfaEnabled = true;
+
     await user.save();
 
-    const qrCode = await qrcode.toDataURL(secret.otpauth_url);
-    res.json({ qrCode, secret: secret.base32 });
+    const qrCode = await qrcode.toDataURL(
+      secret.otpauth_url
+    );
+
+    res.json({
+      qrCode,
+      secret: secret.base32
+    });
+
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({
+      error: err.message
+    });
   }
 });
 
-// ─── LOGOUT ──────────────────────────────────────────────
+// LOGOUT
 router.post('/logout', async (req, res) => {
   try {
     const { email } = req.body;
-    await logEvent('LOGOUT', email || 'unknown', req.ip);
-    res.json({ message: 'Logged out successfully' });
+
+    await logEvent(
+      'LOGOUT',
+      email || 'unknown',
+      req.ip
+    );
+
+    res.json({
+      message: 'Logged out successfully'
+    });
+
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({
+      error: err.message
+    });
   }
 });
 
