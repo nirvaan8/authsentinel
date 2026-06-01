@@ -4,7 +4,7 @@ let wss;
 
 const initWebSocket = (server) => {
   wss = new WebSocketServer({
-    port: 5001
+    port: 5002
   });
 
   wss.on('connection', (ws) => {
@@ -15,7 +15,7 @@ const initWebSocket = (server) => {
     });
   });
 
-  console.log('✅ WebSocket server running on ws://localhost:5001');
+  console.log('✅ WebSocket server running on ws://localhost:5002');
 
   return wss;
 };

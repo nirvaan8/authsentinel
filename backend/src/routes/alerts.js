@@ -7,55 +7,47 @@ const User = require('../models/User');
 const { verifyToken, requireRole } = require('../middleware/auth');
 const { logEvent } = require('../utils/auditLogger');
 
-// GET all alerts
-router.get(
-  '/',
-  verifyToken,
-  async (req, res) => {
-    try {
-      const alerts = await Alert.find()
-        .sort({ createdAt: -1 })
-        .limit(100);
+// GET ALL ALERTS
+router.get('/', verifyToken, async (req, res) => {
+  try {
+    const alerts = await Alert.find()
+      .sort({ createdAt: -1 })
+      .limit(100);
 
-      res.json(alerts);
-    } catch (err) {
-      res.status(500).json({
-        error: err.message
-      });
-    }
+    res.json(alerts);
+  } catch (err) {
+    res.status(500).json({
+      error: err.message
+    });
   }
-);
+});
 
 // ACKNOWLEDGE ALERT
-router.patch(
-  '/:id/acknowledge',
-  verifyToken,
-  async (req, res) => {
-    try {
-      const alert = await Alert.findByIdAndUpdate(
-        req.params.id,
-        {
-          acknowledged: true,
-          acknowledgedBy: req.user.email
-        },
-        {
-          new: true
-        }
-      );
+router.patch('/:id/acknowledge', verifyToken, async (req, res) => {
+  try {
+    const alert = await Alert.findByIdAndUpdate(
+      req.params.id,
+      {
+        acknowledged: true,
+        acknowledgedBy: req.user.email
+      },
+      {
+        new: true
+      }
+    );
 
-      res.json({
-        message: 'Alert acknowledged',
-        alert
-      });
-    } catch (err) {
-      res.status(500).json({
-        error: err.message
-      });
-    }
+    res.json({
+      message: 'Alert acknowledged',
+      alert
+    });
+  } catch (err) {
+    res.status(500).json({
+      error: err.message
+    });
   }
-);
+});
 
-// SUSPEND USER — Admin only
+// SUSPEND USER (ADMIN ONLY)
 router.patch(
   '/:id/suspend',
   verifyToken,
@@ -72,6 +64,12 @@ router.patch(
         }
       );
 
+      if (!user) {
+        return res.status(404).json({
+          error: 'User not found'
+        });
+      }
+
       await logEvent(
         'ROLE_CHANGE',
         user.email,
@@ -83,10 +81,9 @@ router.patch(
       );
 
       res.json({
-        message: 'User suspended',
+        message: 'User suspended successfully',
         user
       });
-
     } catch (err) {
       res.status(500).json({
         error: err.message
