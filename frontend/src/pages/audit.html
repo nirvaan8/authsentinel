@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AuthSentinel — Audit Log</title>
+
+  <link rel="stylesheet" href="../css/style.css"/>
+  <link rel="stylesheet" href="../css/dashboard.css"/>
+</head>
+
+<body>
+
+  <nav class="navbar">
+    <div class="brand">📋 Audit Log</div>
+
+    <div class="nav-links">
+      <a href="dashboard.html">
+        <button class="btn btn-secondary">← Dashboard</button>
+      </a>
+    </div>
+  </nav>
+
+  <div class="page-content">
+    <div class="card">
+
+      <table>
+        <thead>
+          <tr>
+            <th>Event</th>
+            <th>User</th>
+            <th>IP</th>
+            <th>Details</th>
+            <th>Time</th>
+          </tr>
+        </thead>
+
+        <tbody id="auditTable">
+          <tr>
+            <td colspan="5">Loading...</td>
+          </tr>
+        </tbody>
+      </table>
+
+    </div>
+  </div>
+
+  <script src="../hooks/auth.js"></script>
+
+  <script>
+    guardPage();
+
+    async function loadAudit() {
+      try {
+        const logs = await apiFetch('/api/audit');
+
+        const tbody = document.getElementById('auditTable');
+
+        tbody.innerHTML = logs.map(log => `
+          <tr>
+            <td style="color:#60a5fa;font-weight:600;">
+              ${log.event}
+            </td>
+
+            <td>${log.user}</td>
+
+            <td>${log.ip}</td>
+
+            <td style="color:#64748b;font-size:12px;">
+              ${JSON.stringify(log.details || {})}
+            </td>
+
+            <td>
+              ${new Date(log.createdAt).toLocaleString()}
+            </td>
+          </tr>
+        `).join('');
+
+      } catch (err) {
+        console.error('Audit log error:', err.message);
+
+        document.getElementById('auditTable').innerHTML = `
+          <tr>
+            <td colspan="5">
+              Failed to load audit logs.
+            </td>
+          </tr>
+        `;
+      }
+    }
+
+    loadAudit();
+  </script>
+
+</body>
+</html>
