@@ -80,10 +80,13 @@ router.post('/register', async (req, res) => {
 });
 
 // LOGIN
-router.post('/login', loginLimiter, async (req, res) => {
+// LOGIN
+router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
     const ip = req.ip;
+
+    console.log('STEP 0: Login request received');
 
     const user = await User.findOne({ email });
 
@@ -92,6 +95,8 @@ router.post('/login', loginLimiter, async (req, res) => {
         error: 'Invalid credentials'
       });
     }
+
+    console.log('STEP 1: User found');
 
     if (user.isSuspended) {
       return res.status(403).json({
@@ -106,6 +111,8 @@ router.post('/login', loginLimiter, async (req, res) => {
     }
 
     const isMatch = await user.comparePassword(password);
+
+    console.log('STEP 2: Password checked');
 
     if (!isMatch) {
       user.failedLoginAttempts += 1;
@@ -159,11 +166,15 @@ router.post('/login', loginLimiter, async (req, res) => {
 
     await user.save();
 
+    console.log('STEP 3: User saved');
+
     await checkOffHours(
       email,
       ip,
       getWss()
     );
+
+    console.log('STEP 4: Off-hours check complete');
 
     if (user.mfaEnabled) {
       return res.json({
@@ -174,6 +185,8 @@ router.post('/login', loginLimiter, async (req, res) => {
 
     const token = generateToken(user);
 
+    console.log('STEP 5: Token generated');
+
     await logEvent(
       'LOGIN',
       email,
@@ -182,6 +195,8 @@ router.post('/login', loginLimiter, async (req, res) => {
         role: user.role
       }
     );
+
+    console.log('STEP 6: Audit logged');
 
     res.json({
       token,
@@ -194,12 +209,16 @@ router.post('/login', loginLimiter, async (req, res) => {
     });
 
   } catch (err) {
+    console.error('========== LOGIN ERROR ==========');
+    console.error(err);
+    console.error(err.stack);
+    console.error('=================================');
+
     res.status(500).json({
       error: err.message
     });
   }
 });
-
 // VERIFY TOTP
 router.post('/verify-totp', async (req, res) => {
   try {
