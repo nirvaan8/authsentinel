@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AuthSentinel — Dashboard</title>
+
+  <link rel="stylesheet" href="../css/style.css" />
+  <link rel="stylesheet" href="../css/dashboard.css" />
+</head>
+<body>
+
+  <!-- Navbar -->
+  <nav class="navbar">
+    <div class="brand">🛡️ AuthSentinel SOC</div>
+
+    <div class="nav-links">
+      <span class="user-info" id="userInfo"></span>
+
+      <a href="alerts.html">
+        <button class="btn btn-secondary">Alerts</button>
+      </a>
+
+      <a href="users.html">
+        <button class="btn btn-secondary">Users</button>
+      </a>
+
+      <a href="audit.html">
+        <button class="btn btn-secondary">Audit Log</button>
+      </a>
+
+      <button class="btn btn-danger" onclick="handleLogout()">
+        Logout
+      </button>
+    </div>
+  </nav>
+
+  <div class="page-content">
+
+    <!-- Statistics -->
+    <div class="stat-grid">
+
+      <div class="stat-card">
+        <div class="label">Total Users</div>
+        <div class="value" id="totalUsers">—</div>
+      </div>
+
+      <div class="stat-card">
+        <div class="label">Alerts Today</div>
+        <div class="value" id="alertsToday">—</div>
+      </div>
+
+      <div class="stat-card">
+        <div class="label">Audit Events</div>
+        <div class="value" id="auditEvents">—</div>
+      </div>
+
+      <div class="stat-card">
+        <div class="label">Active Role</div>
+        <div class="value" id="activeRole" style="font-size:20px;">—</div>
+      </div>
+
+    </div>
+
+    <!-- Live Alerts -->
+    <div class="card" style="margin-bottom:24px;">
+      <div class="section-title">🚨 Live Alerts</div>
+
+      <div class="alert-feed" id="alertFeed">
+        <div class="empty-state">
+          No alerts yet — monitoring active...
+        </div>
+      </div>
+    </div>
+
+    <!-- Audit Table -->
+    <div class="card">
+      <div class="section-title">📋 Recent Audit Events</div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Event</th>
+            <th>User</th>
+            <th>IP</th>
+            <th>Time</th>
+          </tr>
+        </thead>
+
+        <tbody id="auditTable">
+          <tr>
+            <td colspan="4" class="empty-state">
+              Loading...
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+
+  <script src="../hooks/auth.js"></script>
+  <script src="../hooks/websocket.js"></script>
+
+  <script>
+    guardPage();
+
+    const user = getUser();
+
+    document.getElementById("userInfo").textContent =
+      `${user?.name} (${user?.role})`;
+
+    document.getElementById("activeRole").textContent =
+      user?.role || "Unknown";
+
+    async function loadStats() {
+      try {
+        const [users, alerts, audit] = await Promise.all([
+          apiFetch("/api/users"),
+          apiFetch("/api/alerts"),
+          apiFetch("/api/audit")
+        ]);
+
+        document.getElementById("totalUsers").textContent =
+          users.length;
+
+        const today = new Date().toDateString();
+
+        const todayAlerts = alerts.filter(
+          alert =>
+            new Date(alert.createdAt).toDateString() === today
+        );
+
+        document.getElementById("alertsToday").textContent =
+          todayAlerts.length;
+
+        document.getElementById("auditEvents").textContent =
+          audit.length;
+
+        const tbody = document.getElementById("auditTable");
+
+        tbody.innerHTML = audit
+          .slice(0, 10)
+          .map(
+            log => `
+              <tr>
+                <td style="color:#60a5fa;font-weight:600;">
+                  ${log.event}
+                </td>
+                <td>${log.user}</td>
+                <td>${log.ip}</td>
+                <td>${new Date(
+                  log.createdAt
+                ).toLocaleString()}</td>
+              </tr>
+            `
+          )
+          .join("");
+      } catch (err) {
+        console.error("Stats error:", err.message);
+      }
+    }
+
+    connectWebSocket((alert) => {
+      const feed = document.getElementById("alertFeed");
+
+      const emptyState =
+        feed.querySelector(".empty-state");
+
+      if (emptyState) emptyState.remove();
+
+      const severityClass =
+        alert.severity?.toLowerCase() === "critical"
+          ? ""
+          : alert.severity?.toLowerCase() === "high"
+          ? "high"
+          : alert.severity?.toLowerCase() === "medium"
+          ? "medium"
+          : "low";
+
+      const item = document.createElement("div");
+
+      item.className = `alert-item ${severityClass}`;
+
+      item.innerHTML = `
+        <div class="alert-top">
+          <span class="alert-type">
+            ${alert.type}
+          </span>
+
+          <span class="severity-${alert.severity?.toLowerCase()}">
+            ${alert.severity}
+          </span>
+        </div>
+
+        <div class="alert-meta">
+          ${alert.user} —
+          ${alert.ip} —
+          ${new Date(alert.timestamp).toLocaleTimeString()}
+        </div>
+      `;
+
+      feed.prepend(item);
+    });
+
+    async function handleLogout() {
+      try {
+        await apiFetch("/api/auth/logout", {
+          method: "POST",
+          body: JSON.stringify({
+            email: user?.email
+          })
+        });
+      } catch (err) {
+        console.log(err);
+      }
+
+      clearAuth();
+      window.location.href = "../../index.html";
+    }
+
+    loadStats();
+  </script>
+
+</body>
+</html>
