@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AuthSentinel — Alerts</title>
+
+  <link rel="stylesheet" href="../css/style.css"/>
+  <link rel="stylesheet" href="../css/dashboard.css"/>
+</head>
+
+<body>
+
+  <nav class="navbar">
+    <div class="brand">🚨 Alerts</div>
+
+    <div class="nav-links">
+      <a href="dashboard.html">
+        <button class="btn btn-secondary">← Dashboard</button>
+      </a>
+    </div>
+  </nav>
+
+  <div class="page-content">
+    <div class="card">
+
+      <table>
+        <thead>
+          <tr>
+            <th>Type</th>
+            <th>Severity</th>
+            <th>User</th>
+            <th>IP</th>
+            <th>Time</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+
+        <tbody id="alertsTable">
+          <tr>
+            <td colspan="6">Loading...</td>
+          </tr>
+        </tbody>
+
+      </table>
+
+    </div>
+  </div>
+
+  <script src="../hooks/auth.js"></script>
+
+  <script>
+    guardPage();
+
+    async function loadAlerts() {
+      const alerts = await apiFetch('/api/alerts');
+
+      const tbody = document.getElementById('alertsTable');
+
+      tbody.innerHTML = alerts.map(a => `
+        <tr>
+          <td style="font-weight:600; color:white;">
+            ${a.type}
+          </td>
+
+          <td class="severity-${a.severity?.toLowerCase()}">
+            ${a.severity}
+          </td>
+
+          <td>${a.user}</td>
+
+          <td>${a.ip}</td>
+
+          <td>${new Date(a.createdAt).toLocaleString()}</td>
+
+          <td>
+            <span class="badge ${
+              a.acknowledged
+                ? 'badge-active'
+                : 'badge-guest'
+            }">
+              ${
+                a.acknowledged
+                  ? 'Acknowledged'
+                  : 'Open'
+              }
+            </span>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    loadAlerts();
+  </script>
+
+</body>
+</html>
