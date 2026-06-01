@@ -8,7 +8,7 @@
 
 AuthSentinel is a full-stack cybersecurity platform that simulates an enterprise Identity and Access Management (IAM) environment and monitors it for identity-based threats in real time. It bridges the gap between access control and security operations — when something suspicious happens to an identity, the SOC team knows instantly.
 
-Built as a group project by two B.Tech Cybersecurity students.
+Built as a group project by two B.Tech Cybersecurity students at NIIT University, Neemrana.
 
 ---
 
@@ -20,18 +20,18 @@ In most organizations, IAM and SOC operate in silos. User accounts get compromis
 
 ## Features
 
-- **Role-Based Access Control (RBAC)** — Admin, Analyst, Viewer, and Guest roles with enforced permission boundaries
-- **Multi-Factor Authentication (MFA)** — TOTP-based 2FA mandatory for privileged roles
-- **Session Management** — Active session tracking, forced logout, concurrent session limits
-- **Threat Detection Engine** — Rules for:
-  - Brute force login attempts
-  - Off-hours access (configurable time window)
-  - Privilege escalation events
+- **Role-Based Access Control (RBAC)** — Admin, Analyst, Viewer, and Guest roles with enforced permission boundaries at both API and UI level
+- **Multi-Factor Authentication (MFA)** — TOTP-based 2FA with QR code setup, mandatory for privileged roles
+- **Google OAuth** — One-click sign in via Google (in progress)
+- **Threat Detection Engine** — Real-time rules for:
+  - Brute force login attempts (5+ failures → Critical alert + account lock)
+  - Off-hours access detection (outside 08:00–20:00 IST)
   - Account lockout triggers
+  - MFA failure tracking
   - Suspicious role changes
-- **SOC Alert Dashboard** — Live WebSocket feed with Critical / High / Medium severity classification
+- **SOC Alert Dashboard** — Live WebSocket feed with Critical / High / Medium / Low severity classification
 - **Audit Log** — Immutable timestamped record of every identity event (LOGIN, LOGOUT, ROLE_CHANGE, LOCKOUT, MFA_FAIL)
-- **User Management Panel** — Provision, suspend, and manage users with full activity history
+- **User Management Panel** — View all users, roles, MFA status, and last login (Admin only)
 
 ---
 
@@ -41,9 +41,10 @@ In most organizations, IAM and SOC operate in silos. User accounts get compromis
 |---|---|
 | Backend | Node.js + Express |
 | Database | MongoDB Atlas |
-| Authentication | JWT + bcrypt + TOTP (speakeasy) |
+| Authentication | JWT + bcrypt + TOTP (speakeasy) + Google OAuth (passport) |
 | Real-time | WebSockets (ws) |
-| Frontend | React + Tailwind CSS |
+| Frontend | Vanilla HTML + CSS + JavaScript |
+| Dev Server | Python HTTP Server |
 | Deployment | Docker + Docker Compose |
 
 ---
@@ -53,7 +54,7 @@ In most organizations, IAM and SOC operate in silos. User accounts get compromis
 ```
 ┌─────────────────────────────────────────────┐
 │                  Frontend                    │
-│   React Dashboard  │  User Management Panel  │
+│   HTML/CSS/JS  │  SOC Dashboard  │  Users   │
 └────────────┬────────────────────────────────┘
              │ REST API + WebSocket
 ┌────────────▼────────────────────────────────┐
@@ -64,7 +65,7 @@ In most organizations, IAM and SOC operate in silos. User accounts get compromis
              │
 ┌────────────▼────────────────────────────────┐
 │               MongoDB Atlas                  │
-│  Users  │  Sessions  │  Alerts  │  AuditLog │
+│  Users  │  Alerts  │  AuditLog              │
 └─────────────────────────────────────────────┘
 ```
 
@@ -76,19 +77,20 @@ In most organizations, IAM and SOC operate in silos. User accounts get compromis
 authsentinel/
 ├── backend/
 │   ├── src/
-│   │   ├── routes/          # auth, users, alerts
-│   │   ├── middleware/       # RBAC, JWT verify, rate limit
+│   │   ├── routes/          # auth, users, alerts, audit
+│   │   ├── middleware/       # RBAC, JWT verify
 │   │   ├── detection/        # threat detection rule engine
-│   │   ├── models/           # Mongoose schemas
-│   │   └── utils/            # logger, totp, helpers
+│   │   ├── models/           # User, Alert, AuditLog schemas
+│   │   └── utils/            # auditLogger, websocket
 │   ├── .env.example
 │   └── package.json
 ├── frontend/
 │   ├── src/
-│   │   ├── pages/            # Login, Dashboard, Users, Alerts
-│   │   ├── components/       # AlertFeed, AuditTable, StatCards
-│   │   └── hooks/            # useWebSocket, useAuth
-│   └── package.json
+│   │   ├── pages/            # login, dashboard, users, alerts, audit
+│   │   ├── components/       # navbar
+│   │   ├── hooks/            # auth.js, websocket.js
+│   │   └── css/              # style.css, dashboard.css
+│   └── index.html
 ├── docker-compose.yml
 └── README.md
 ```
@@ -98,54 +100,51 @@ authsentinel/
 ## Getting Started
 
 ### Prerequisites
-
 - Node.js v18+
 - MongoDB Atlas account (free tier works)
-- Docker (optional, for containerized setup)
+- Python 3 (for frontend dev server)
 
-### Installation
+### Backend Setup
 
 ```bash
-# Clone the repo
 git clone https://github.com/nirvaan8/authsentinel
-cd authsentinel
-
-# Backend setup
-cd backend
-cp .env.example .env        # fill in your MongoDB URI + JWT secret
+cd authsentinel/backend
+cp .env.example .env        # fill in your credentials
 npm install
-npm run dev
-
-# Frontend setup (new terminal)
-cd frontend
-npm install
-npm start
+node src/server.js
 ```
 
-### With Docker
+API runs at `http://localhost:5000`  
+WebSocket runs at `ws://localhost:5001`
+
+### Frontend Setup
 
 ```bash
-docker-compose up --build
+cd frontend
+python3 -m http.server 3000
 ```
 
-App runs at `http://localhost:3000`, API at `http://localhost:5000`.
+Open `http://localhost:3000`
 
 ---
 
 ## Environment Variables
 
-Create a `.env` file inside `/backend` using `.env.example` as a reference:
+Create a `.env` file inside `/backend` using `.env.example` as reference:
 
 ```env
 PORT=5000
-MONGO_URI=your_mongodb_atlas_uri_here
-JWT_SECRET=your_jwt_secret_here
+MONGO_URI=your_mongodb_atlas_uri
+JWT_SECRET=your_jwt_secret
 JWT_EXPIRES_IN=7d
-TOTP_SECRET_KEY=your_totp_base_secret
+TOTP_SECRET_KEY=your_totp_secret
+GOOGLE_CLIENT_ID=your_google_client_id
+GOOGLE_CLIENT_SECRET=your_google_client_secret
+GOOGLE_CALLBACK_URL=http://localhost:5000/api/auth/google/callback
 NODE_ENV=development
 ```
 
-Never commit your `.env` file. It is already listed in `.gitignore`.
+Never commit your `.env` file — it is already in `.gitignore`.
 
 ---
 
@@ -166,10 +165,8 @@ Never commit your `.env` file. It is already listed in `.gitignore`.
 |---|---|---|
 | Brute Force | 5+ failed logins within 2 minutes | Critical |
 | Off-Hours Access | Login outside 08:00–20:00 IST | Medium |
-| Privilege Escalation | Role changed to Admin without approval | High |
 | Account Lockout | Account locked after repeated failures | High |
-| MFA Failure | 3+ consecutive TOTP failures | High |
-| Suspicious Role Change | Role changed by non-Admin user | Critical |
+| MFA Failure | Consecutive TOTP failures | High |
 
 ---
 
@@ -181,7 +178,9 @@ Never commit your `.env` file. It is already listed in `.gitignore`.
 | POST | `/api/auth/register` | Register a new user |
 | POST | `/api/auth/login` | Login + receive JWT |
 | POST | `/api/auth/verify-totp` | Verify TOTP code |
-| POST | `/api/auth/logout` | Invalidate session |
+| POST | `/api/auth/setup-mfa` | Generate MFA QR code |
+| POST | `/api/auth/logout` | Logout |
+| GET | `/api/auth/google` | Google OAuth login |
 
 ### Users
 | Method | Endpoint | Description |
@@ -207,18 +206,19 @@ Never commit your `.env` file. It is already listed in `.gitignore`.
 
 | Name | Role |
 |---|---|
-| Nirvaan Katyal | Backend — Auth engine, RBAC, threat detection, audit logging |
-| [Partner Name] | Frontend — SOC dashboard, alert UI, user panel, WebSocket integration |
+| Nirvaan Katyal | Backend — Auth engine, RBAC, threat detection, WebSocket, audit logging |
+| Aryan Kaushik | Frontend — SOC dashboard, alert UI, user panel, CSS |
 
 ---
 
 ## Roadmap
 
+- [ ] Google OAuth (in progress)
+- [ ] Register page for demo use
 - [ ] SIEM export (Splunk/Elastic push)
-- [ ] Geo-based anomaly detection (login from new country)
-- [ ] Email/SMS alert notifications
+- [ ] Geo-based anomaly detection
 - [ ] PDF incident report export
-- [ ] Kubernetes deployment config
+- [ ] Kubernetes deployment
 
 ---
 
