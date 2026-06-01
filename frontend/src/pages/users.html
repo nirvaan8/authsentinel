@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AuthSentinel — Users</title>
+
+  <link rel="stylesheet" href="../css/style.css"/>
+  <link rel="stylesheet" href="../css/dashboard.css"/>
+</head>
+
+<body>
+
+  <nav class="navbar">
+    <div class="brand">👥 User Management</div>
+
+    <div class="nav-links">
+      <a href="dashboard.html">
+        <button class="btn btn-secondary">← Dashboard</button>
+      </a>
+    </div>
+  </nav>
+
+  <div class="page-content">
+    <div class="card">
+
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Role</th>
+            <th>Status</th>
+            <th>MFA</th>
+            <th>Last Login</th>
+          </tr>
+        </thead>
+
+        <tbody id="usersTable">
+          <tr>
+            <td colspan="6">Loading...</td>
+          </tr>
+        </tbody>
+      </table>
+
+    </div>
+  </div>
+
+  <script src="../hooks/auth.js"></script>
+
+  <script>
+    guardPage();
+
+    async function loadUsers() {
+      try {
+        const users = await apiFetch('/api/users');
+
+        const tbody = document.getElementById('usersTable');
+
+        tbody.innerHTML = users.map(u => `
+          <tr>
+
+            <td style="color:white;font-weight:500;">
+              ${u.name}
+            </td>
+
+            <td>${u.email}</td>
+
+            <td>
+              <span class="badge badge-${u.role.toLowerCase()}">
+                ${u.role}
+              </span>
+            </td>
+
+            <td>
+              <span class="badge ${
+                u.isSuspended
+                  ? 'badge-suspended'
+                  : 'badge-active'
+              }">
+                ${
+                  u.isSuspended
+                    ? 'Suspended'
+                    : 'Active'
+                }
+              </span>
+            </td>
+
+            <td>
+              <span class="badge ${
+                u.mfaEnabled
+                  ? 'badge-active'
+                  : 'badge-guest'
+              }">
+                ${
+                  u.mfaEnabled
+                    ? 'Enabled'
+                    : 'Disabled'
+                }
+              </span>
+            </td>
+
+            <td>
+              ${
+                u.lastLogin
+                  ? new Date(u.lastLogin).toLocaleString()
+                  : 'Never'
+              }
+            </td>
+
+          </tr>
+        `).join('');
+
+      } catch (err) {
+        console.error('Users error:', err.message);
+
+        document.getElementById('usersTable').innerHTML = `
+          <tr>
+            <td colspan="6">
+              Failed to load users.
+            </td>
+          </tr>
+        `;
+      }
+    }
+
+    loadUsers();
+  </script>
+
+</body>
+</html>
