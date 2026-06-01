@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AuthSentinel — Login</title>
+  <link rel="stylesheet" href="src/css/style.css"/>
+  <style>
+    .login-wrap {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .login-box {
+      background: #111827;
+      border: 1px solid #1e293b;
+      border-radius: 16px;
+      padding: 36px;
+      width: 100%;
+      max-width: 420px;
+    }
+    .login-box h1 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+    .login-box p { font-size: 13px; color: #64748b; margin-bottom: 24px; }
+    .form-group { margin-bottom: 14px; }
+    .form-group input {
+      width: 100%;
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 10px 14px;
+      color: white;
+      font-size: 14px;
+      outline: none;
+      transition: border 0.2s;
+    }
+    .form-group input:focus { border-color: #3b82f6; }
+    .btn { width: 100%; margin-bottom: 10px; }
+    .divider {
+      text-align: center;
+      color: #475569;
+      font-size: 12px;
+      margin: 4px 0;
+    }
+    .totp-input {
+      text-align: center;
+      letter-spacing: 8px;
+      font-size: 24px !important;
+    }
+    .mfa-section { display: none; }
+  </style>
+</head>
+<body>
+  <div class="login-wrap">
+    <div class="login-box">
+      <h1>AuthSentinel</h1>
+      <p>Privileged Access Monitoring System</p>
+      <div id="errorMsg" class="error-msg" style="display:none;"></div>
+
+      <!-- Login Form -->
+      <div id="loginSection">
+        <div class="form-group">
+          <input type="email" id="email" placeholder="Email address" required />
+        </div>
+        <div class="form-group">
+          <input type="password" id="password" placeholder="Password" required />
+        </div>
+        <button class="btn btn-primary" onclick="handleLogin()">Login</button>
+        <div class="divider">or</div>
+        <button class="btn btn-google" onclick="handleGoogle()">Sign in with Google</button>
+      </div>
+
+      <!-- MFA Form -->
+      <div id="mfaSection" class="mfa-section">
+        <p style="color:#94a3b8; font-size:14px; margin-bottom:16px;">
+          Enter the 6-digit code from your authenticator app
+        </p>
+        <div class="form-group">
+          <input type="text" id="totpCode" class="totp-input" placeholder="000000" maxlength="6" />
+        </div>
+        <button class="btn btn-primary" onclick="handleMfa()">Verify</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="src/hooks/auth.js"></script>
+  <script>
+    let pendingUserId = null;
+
+    function showError(msg) {
+      const el = document.getElementById('errorMsg');
+      el.textContent = msg;
+      el.style.display = 'block';
+    }
+
+    async function handleLogin() {
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+      try {
+        const data = await apiFetch('/api/auth/login', {
+          method: 'POST',
+          body: JSON.stringify({ email, password })
+        });
+        if (data.mfaRequired) {
+          pendingUserId = data.userId;
+          document.getElementById('loginSection').style.display = 'none';
+          document.getElementById('mfaSection').style.display = 'block';
+        } else {
+          setAuth(data.token, data.user);
+          window.location.href = 'src/pages/dashboard.html';
+        }
+      } catch (err) {
+        showError(err.message);
+      }
+    }
+
+    async function handleMfa() {
+      const token = document.getElementById('totpCode').value;
+      try {
+        const data = await apiFetch('/api/auth/verify-totp', {
+          method: 'POST',
+          body: JSON.stringify({ userId: pendingUserId, token })
+        });
+        setAuth(data.token, data.user);
+        window.location.href = 'src/pages/dashboard.html';
+      } catch (err) {
+        showError(err.message);
+      }
+    }
+
+    function handleGoogle() {
+      window.location.href = 'http://localhost:5000/api/auth/google';
+    }
+
+    if (isLoggedIn()) window.location.href = 'src/pages/dashboard.html';
+  </script>
+</body>
+</html>

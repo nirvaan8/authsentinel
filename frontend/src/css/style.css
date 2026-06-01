@@ -1,0 +1,80 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+body {
+  font-family: 'Segoe UI', sans-serif;
+  background-color: #0a0a0f;
+  color: #e2e8f0;
+  min-height: 100vh;
+}
+a { text-decoration: none; color: inherit; }
+.btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: 0.2s;
+}
+.btn-primary { background: #3b82f6; color: white; }
+.btn-primary:hover { background: #2563eb; }
+.btn-danger { background: #dc2626; color: white; }
+.btn-danger:hover { background: #b91c1c; }
+.btn-secondary { background: #1e293b; color: #94a3b8; }
+.btn-secondary:hover { background: #334155; color: white; }
+.btn-google { background: white; color: #1a1a2e; }
+.btn-google:hover { background: #f1f5f9; }
+.card {
+  background: #111827;
+  border: 1px solid #1e293b;
+  border-radius: 12px;
+  padding: 20px;
+}
+.badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.badge-admin { background: #1e3a5f; color: #60a5fa; }
+.badge-analyst { background: #1a3a2a; color: #34d399; }
+.badge-viewer { background: #2d2a1a; color: #fbbf24; }
+.badge-guest { background: #1e1e2e; color: #94a3b8; }
+.badge-active { background: #14532d; color: #4ade80; }
+.badge-suspended { background: #450a0a; color: #f87171; }
+.severity-critical { color: #f87171; }
+.severity-high { color: #fb923c; }
+.severity-medium { color: #fbbf24; }
+.severity-low { color: #4ade80; }
+.error-msg {
+  background: #450a0a;
+  color: #f87171;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+thead th {
+  text-align: left;
+  padding: 10px 16px;
+  font-size: 11px;
+  text-transform: uppercase;
+  color: #64748b;
+  border-bottom: 1px solid #1e293b;
+  letter-spacing: 0.05em;
+}
+tbody tr {
+  border-bottom: 1px solid #1e293b;
+  transition: background 0.15s;
+}
+tbody tr:hover { background: #1e293b; }
+tbody td { padding: 10px 16px; color: #cbd5e1; }
